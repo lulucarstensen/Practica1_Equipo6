@@ -29,7 +29,7 @@
   #define mDefaultValueOfChannel_c (0x0001FFFF)
   #define mDefaultMaxChannel_c     (0x11)
 #else
-  #define mDefaultValueOfChannel_c (0x0F)
+  #define mDefaultValueOfChannel_c (gChannelMask15_c)
 #endif
 
 #define mMacExtendedAddress_c    (0x6666666666666666)
