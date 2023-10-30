@@ -112,7 +112,7 @@ void LED_StartTimer()
     /* start the timer */
     if(!TMR_IsTimerActive(ledTimerID))
     {
-        TMR_StartIntervalTimer(ledTimerID, 2000, (pfTmrCallBack_t)RGB_Timeout, (void*)((uint32_t)ledTimerID));
+        //TMR_StartIntervalTimer(ledTimerID, 2000, (pfTmrCallBack_t)RGB_Timeout, (void*)((uint32_t)ledTimerID));
     }
 }
 
@@ -123,22 +123,22 @@ static void newMessage(uint8_t message)
 	switch(count)
 	{
 		case 0:
-			Led_RGB(Led_RGB,LED_MAX_RGB_VALUE_c,0,0);
+			Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,0);
 			break;
 		case 1:
-			Led_RGB(Led_RGB,0,LED_MAX_RGB_VALUE_c,0);
+			Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,0);
 			break;
 		case 2:
-			Led_RGB(Led_RGB,0,0,LED_MAX_RGB_VALUE_c);
+			Led_RGB(LED_RGB,0,0,LED_MAX_RGB_VALUE_c);
 			break;
 		case 3:
-			Led_RGB(Led_RGB,0,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
+			Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
 			break;
 		case 4:
-			Led_RGB(Led_RGB,LED_MAX_RGB_VALUE_c,0,LED_MAX_RGB_VALUE_c);
+			Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,LED_MAX_RGB_VALUE_c);
 			break;
 		case 5:
-			Led_RGB(Led_RGB,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
+			Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
 			break;
 		default:
 			break;
