@@ -112,14 +112,33 @@ void LED_StartTimer()
     /* start the timer */
     if(!TMR_IsTimerActive(ledTimerID))
     {
-        //TMR_StartIntervalTimer(ledTimerID, 2000, (pfTmrCallBack_t)RGB_Timeout, (void*)((uint32_t)ledTimerID));
+      //  TMR_StartIntervalTimer(ledTimerID, 2000, (pfTmrCallBack_t)RGB_Timeout, (void*)((uint32_t)ledTimerID));
     }
 }
 
-static void newMessage(uint8_t message)
+static void newMessage(mcpsToNwkMessage_t * message,uint8_t interfaceId,uint8_t mcPendingPackets)
 {
 	uint8_t count;
-    //Check new message is counter
+	//message->msgData.dataInd.pMsdu;
+	switch(message->msgType)
+	{
+		/* The MCPS-Data confirm is sent by the MAC to the network
+		or application layer when data has been sent. */
+		case gMcpsDataCnf_c:
+			if(mcPendingPackets)
+				mcPendingPackets--;
+			break;
+
+		case gMcpsDataInd_c:
+
+            Serial_PrintHex(interfaceId,&message->msgData.dataInd.srcPanId, 2, gPrtHexNoFormat_c);
+            Serial_PrintHex(interfaceId,&message->msgData.dataInd.mpduLinkQuality, 1, gPrtHexNoFormat_c);
+            Serial_PrintHex(interfaceId,&message->msgData.dataInd.msduLength, 1, gPrtHexNoFormat_c);
+			break;
+
+		default:
+			break;
+	}
 	switch(count)
 	{
 		case 0:
@@ -143,6 +162,5 @@ static void newMessage(uint8_t message)
 		default:
 			break;
 	}
-//Missing printing source address, LQI, payload size
 
 }
