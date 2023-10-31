@@ -179,10 +179,46 @@ void LED_StartTimer()
     }
 }
 
-//void Initial_State()
-//{
-//
-//}
+void Initial_State()
+{
+	Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,0);
+	Send_Counter();
+}
+
+void Send_Counter()
+{
+	counterToS[9]= gLEDcounter;
+	if(mpPacket != NULL)
+	{
+		/* Data is available in the SerialManager's receive buffer. Now create an
+		MCPS-Data Request message containing the data. */
+		mpPacket->msgType = gMcpsDataReq_c;
+		mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(counterToS);
+		/* Create the header using coordinator information gained during
+		the scan procedure. Also use the short address we were assigned
+		by the coordinator during association. */
+		FLib_MemCpy(&mpPacket->msgData.dataReq.dstAddr, &mCoordInfo.coordAddress, 8);
+		FLib_MemCpy(&mpPacket->msgData.dataReq.srcAddr, &maMyAddress, 8);
+		FLib_MemCpy(&mpPacket->msgData.dataReq.dstPanId, &mCoordInfo.coordPanId, 2);
+		FLib_MemCpy(&mpPacket->msgData.dataReq.srcPanId, &mCoordInfo.coordPanId, 2);
+		mpPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
+		mpPacket->msgData.dataReq.srcAddrMode = mAddrMode;
+		mpPacket->msgData.dataReq.msduLength = sizeof(counterToS);
+		/* Request MAC level acknowledgement of the data packet */
+		mpPacket->msgData.dataReq.txOptions = gMacTxOptionsAck_c;
+		/* Give the data packet a handle. The handle is
+		returned in the MCPS-Data Confirm message. */
+		mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
+		/* Don't use security */
+		mpPacket->msgData.dataReq.securityLevel = gMacSecurityNone_c;
+
+		/* Send the Data Request to the MCPS */
+		(void)NWK_MCPS_SapHandler(mpPacket, macInstance);
+
+		/* Prepare for another data buffer */
+		mpPacket = NULL;
+	}
+}
 
 /*! *********************************************************************************
 * \brief  This is the first task created by the OS. This task will initialize 
@@ -293,9 +329,7 @@ void App_init( void )
     Mac_SetExtendedAddress( (uint8_t*)&mExtendedAddress, macInstance );
     
     mTimer_c = TMR_AllocateTimer();
-    /* register keyboard callback function */
-    KBD_Init(App_HandleKeys);
-    
+
     /* Initialize the UART so that we can print out status messages */
     Serial_InitInterface(&interfaceId, APP_SERIAL_INTERFACE_TYPE, APP_SERIAL_INTERFACE_INSTANCE);
     Serial_SetBaudRate(interfaceId, gUARTBaudRate115200_c);
@@ -307,7 +341,7 @@ void App_init( void )
     
     /*signal app ready*/
     LED_StartSerialFlash(LED1);
-        Serial_Print(interfaceId, "\n\rPress any switch on board to start running the application.\n\r", gAllowToBlock_d);  
+
 
 }
 
@@ -371,38 +405,7 @@ void App_init( void )
 			default:
 				break;
 		}
-		counterToS[9]= gLEDcounter;
-		if(mpPacket != NULL)
-		{
-			/* Data is available in the SerialManager's receive buffer. Now create an
-			MCPS-Data Request message containing the data. */
-			mpPacket->msgType = gMcpsDataReq_c;
-			mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(counterToS);
-			/* Create the header using coordinator information gained during
-			the scan procedure. Also use the short address we were assigned
-			by the coordinator during association. */
-			FLib_MemCpy(&mpPacket->msgData.dataReq.dstAddr, &mCoordInfo.coordAddress, 8);
-			FLib_MemCpy(&mpPacket->msgData.dataReq.srcAddr, &maMyAddress, 8);
-			FLib_MemCpy(&mpPacket->msgData.dataReq.dstPanId, &mCoordInfo.coordPanId, 2);
-			FLib_MemCpy(&mpPacket->msgData.dataReq.srcPanId, &mCoordInfo.coordPanId, 2);
-			mpPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
-			mpPacket->msgData.dataReq.srcAddrMode = mAddrMode;
-			mpPacket->msgData.dataReq.msduLength = sizeof(counterToS);
-			/* Request MAC level acknowledgement of the data packet */
-			mpPacket->msgData.dataReq.txOptions = gMacTxOptionsAck_c;
-			/* Give the data packet a handle. The handle is
-			returned in the MCPS-Data Confirm message. */
-			mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
-			/* Don't use security */
-			mpPacket->msgData.dataReq.securityLevel = gMacSecurityNone_c;
-
-			/* Send the Data Request to the MCPS */
-			(void)NWK_MCPS_SapHandler(mpPacket, macInstance);
-
-			/* Prepare for another data buffer */
-			mpPacket = NULL;
-		}
-
+		Send_Counter();
 	}
 
  }
