@@ -27,14 +27,7 @@
 #include "MemManager.h"
 #include "TimersManager.h"
 #include "FunctionLib.h"
-
-#if mEnterLowPowerWhenIdle_c
-  #include "PWR_Interface.h"
-#endif
-
-#if gNvmTestActive_d
-  #include "NVM_Interface.h"
-#endif
+#include "MyNewTask.h"
 
 /* 802.15.4 */
 #include "PhyInterface.h"
@@ -58,13 +51,6 @@
 #define mAppStackSize_c 700
 #define mAppTaskPrio_c  4
 
-#if gNvmTestActive_d
-
-  /* Current IDs for each data set. */
-  #define mCoordInfo_ID_c          0x0010
-  #define maMyAddress_ID_c         0x0011
-  #define mAddrMode_ID_c           0x0012
-#endif
 
 /************************************************************************************
 *************************************************************************************
@@ -154,19 +140,7 @@ osaTaskId_t           mAppTaskHandler;
 osaTaskId_t			  LED_TaskHandler;
 static char counterToS [10] = "Counter: ";
 
-#if gNvmTestActive_d
 
-static uint16_t timeoutCounter = 0;
-
-/*
- * Datasets used by the NVM test application 
- */
-
-/* This data set contains application variables to be preserved across resets */
-NVM_RegisterDataSet(&mCoordInfo,          1,   sizeof(panDescriptor_t), mCoordInfo_ID_c, gNVM_MirroredInRam_c);
-NVM_RegisterDataSet(&maMyAddress,         1,   8, maMyAddress_ID_c, gNVM_MirroredInRam_c);
-NVM_RegisterDataSet(&mAddrMode,           1,   sizeof(addrModeType_t), mAddrMode_ID_c, gNVM_MirroredInRam_c);
-#endif
 
 
 /************************************************************************************
@@ -193,7 +167,6 @@ void timerLED_Task_init(void)
     LEDTimer = TMR_AllocateTimer();
 	LEDEvent = OSA_EventCreate(TRUE);
 	LED_TaskHandler = OSA_TaskCreate(OSA_TASK(timerLED_Task), NULL);
-
 }
 
 //Start Timer for LED//
@@ -206,6 +179,10 @@ void LED_StartTimer()
     }
 }
 
+//void Initial_State()
+//{
+//
+//}
 
 /*! *********************************************************************************
 * \brief  This is the first task created by the OS. This task will initialize 
@@ -239,13 +216,7 @@ void main_task(uint32_t param)
         Phy_Init();
         RNG_Init(); /* RNG must be initialized after the PHY is Initialized */
         MAC_Init();
-#if mEnterLowPowerWhenIdle_c
-        PWR_Init();
-        PWR_DisallowDeviceToSleep();
-#endif
-#if gNvmTestActive_d
-        NvModuleInit();
-#endif
+
         
         /* Bind to MAC layer */
         macInstance = BindToMAC( (instanceId_t)0 );
@@ -282,38 +253,10 @@ void main_task(uint32_t param)
 ********************************************************************************** */
 void App_Idle_Task(uint32_t argument)
 {
-#if mEnterLowPowerWhenIdle_c
-    PWRLib_WakeupReason_t wakeupReason;
-#endif
 
     while(1)
     {
-#if gNvmTestActive_d
-        /* Process NV Storage save-on-idle and save-on-count requests. */
-        NvIdle();
-#endif
 
-#if mEnterLowPowerWhenIdle_c
-        if( PWR_CheckIfDeviceCanGoToSleep() )
-        {
-            Serial_Print(interfaceId, "\n\rEntering in deep sleep mode...\n\r", gAllowToBlock_d);
-            wakeupReason = PWR_EnterLowPower();
-            PWR_DisallowDeviceToSleep();
-            Led1On();
-            Led2On();
-            Led3On();
-            Led4On();
-
-            if( wakeupReason.Bits.FromKeyBoard )
-            {
-                App_HandleKeys( gKBD_EventSW1_c );
-            }
-        }
-        else
-        {
-            PWR_EnterSleep();
-        }
-#endif
         if( !gUseRtos_c )
         {
             break;
@@ -364,26 +307,8 @@ void App_init( void )
     
     /*signal app ready*/
     LED_StartSerialFlash(LED1);
-#if mEnterLowPowerWhenIdle_c
-    if (!PWRLib_MCU_WakeupReason.Bits.DeepSleepTimeout)
-    {
-#endif
         Serial_Print(interfaceId, "\n\rPress any switch on board to start running the application.\n\r", gAllowToBlock_d);  
-#if gNvmTestActive_d
-        Serial_Print(interfaceId, "Long press switch_1 on board to use MAC data restore from NVM.\n\r", gAllowToBlock_d);  
-#endif
-#if mEnterLowPowerWhenIdle_c
-    }
-    else
-    {
-        Serial_Print(interfaceId, "\n\rWake up from deep sleep.\n\r", gAllowToBlock_d);
-        if(gState == stateInit)
-        {
-            LED_StopFlashingAllLeds();
-            OSA_EventSet(mAppEvent, gAppEvtPressedRestoreNvmBut_c);
-        }
-    }
-#endif
+
 }
 
 /*****************************************************************************
@@ -391,106 +316,92 @@ void App_init( void )
  **************************************************************************/
  void timerLED_Task(osaTaskParam_t argument){
 	 osaEventFlags_t ev;
-	 /* Pointer for storing the messages from MLME, MCPS, and ASP. */
-	 void *pMsgIn = NULL;
-	 /* Stores the status code returned by some functions. */
-	 uint8_t rc;
 	 LED_StartTimer();
 	 while(1)
 	 {
 		 OSA_EventWait(LEDEvent, osaEventFlagsAll_c, FALSE, osaWaitForever_c, &ev);
-
-		 if( !gUseRtos_c && !ev)
+		 switch(ev)
 		 {
-			 break;
-		 }
-
-		 pMsgIn = NULL;
-
-		 /* Dequeue the MLME message */
-		 if( ev & gAppEvtMessageFromMLME_c )
-		 {
-			 /* Get the message from MLME */
-			 pMsgIn = MSG_DeQueue(&mMlmeNwkInputQueue);
-
-			 /* Any time a beacon might arrive. Always handle the beacon frame first */
-			 if (pMsgIn)
-			 {
-				 rc = App_WaitMsg(pMsgIn, gMlmeBeaconNotifyInd_c);
-				 if(rc == errorNoError)
-				 {
-					 /* ALWAYS free the beacon frame contained in the beacon notify indication.*/
-					 /* ALSO the application can use the beacon payload.*/
-					 MSG_Free(((nwkMessage_t *)pMsgIn)->msgData.beaconNotifyInd.pBufferRoot);
-					 Serial_Print(interfaceId, "Received an MLME-Beacon Notify Indication\n\r", gAllowToBlock_d);
-				 }
-			 }
-		 }
-		 else if(ev == gTimerLED_Event)
-		 {
-			 if(gLEDcounter == 6){
-				 gLEDcounter = 0;
-			 }
-
-			switch(gLEDcounter)
+		 	 case(gTimerLED_Event):
+		 	{
+		 		if(gLEDcounter == 6)
+		 		{
+		 			gLEDcounter = 0;
+		 		}
+				gLEDcounter ++;
+				break;
+		 	}
+		 	case (gKBD_EventSW3_c):
 			{
-				case 0:
-					Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,0);
-					break;
-				case 1:
-					Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,0);
-					break;
-				case 2:
-					Led_RGB(LED_RGB,0,0,LED_MAX_RGB_VALUE_c);
-					break;
-				case 3:
-					Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
-					break;
-				case 4:
-					Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,LED_MAX_RGB_VALUE_c);
-					break;
-				case 5:
-					Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
-					break;
-				default:
-					break;
+		 		gLEDcounter = 1;
+				TMR_StopTimer(LEDTimer);
+				LED_StartTimer();
+		 		break;
 			}
-		    if(mpPacket != NULL)
-		    {
-		        /* Data is available in the SerialManager's receive buffer. Now create an
-		        MCPS-Data Request message containing the data. */
-		        mpPacket->msgType = gMcpsDataReq_c;
-		        mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(&mpPacket->msgData.dataReq.pMsdu) +
-		                                          sizeof(mpPacket->msgData.dataReq.pMsdu);
-		        Serial_Read(interfaceId, mpPacket->msgData.dataReq.pMsdu, count, &count);
-		        /* Create the header using coordinator information gained during
-		        the scan procedure. Also use the short address we were assigned
-		        by the coordinator during association. */
-		        FLib_MemCpy(&mpPacket->msgData.dataReq.dstAddr, &mCoordInfo.coordAddress, 8);
-		        FLib_MemCpy(&mpPacket->msgData.dataReq.srcAddr, &maMyAddress, 8);
-		        FLib_MemCpy(&mpPacket->msgData.dataReq.dstPanId, &mCoordInfo.coordPanId, 2);
-		        FLib_MemCpy(&mpPacket->msgData.dataReq.srcPanId, &mCoordInfo.coordPanId, 2);
-		        mpPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
-		        mpPacket->msgData.dataReq.srcAddrMode = mAddrMode;
-		        mpPacket->msgData.dataReq.msduLength = count;
-		        /* Request MAC level acknowledgement of the data packet */
-		        mpPacket->msgData.dataReq.txOptions = gMacTxOptionsAck_c;
-		        /* Give the data packet a handle. The handle is
-		        returned in the MCPS-Data Confirm message. */
-		        mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
-		        /* Don't use security */
-		        mpPacket->msgData.dataReq.securityLevel = gMacSecurityNone_c;
+		 	case (gKBD_EventSW4_c):
+			{
+		 		gLEDcounter = 3;
+				TMR_StopTimer(LEDTimer);
+				LED_StartTimer();
+		 		break;
+			}
+		 	default:
+		 		break;
+		 }//End of Switch Case
+		switch(gLEDcounter)
+		{
+			case 0:
+				Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,0);
+				break;
+			case 1:
+				Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,0);
+				break;
+			case 2:
+				Led_RGB(LED_RGB,0,0,LED_MAX_RGB_VALUE_c);
+				break;
+			case 3:
+				Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
+				break;
+			case 4:
+				Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,LED_MAX_RGB_VALUE_c);
+				break;
+			case 5:
+				Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
+				break;
+			default:
+				break;
+		}
+		counterToS[9]= gLEDcounter;
+		if(mpPacket != NULL)
+		{
+			/* Data is available in the SerialManager's receive buffer. Now create an
+			MCPS-Data Request message containing the data. */
+			mpPacket->msgType = gMcpsDataReq_c;
+			mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(counterToS);
+			/* Create the header using coordinator information gained during
+			the scan procedure. Also use the short address we were assigned
+			by the coordinator during association. */
+			FLib_MemCpy(&mpPacket->msgData.dataReq.dstAddr, &mCoordInfo.coordAddress, 8);
+			FLib_MemCpy(&mpPacket->msgData.dataReq.srcAddr, &maMyAddress, 8);
+			FLib_MemCpy(&mpPacket->msgData.dataReq.dstPanId, &mCoordInfo.coordPanId, 2);
+			FLib_MemCpy(&mpPacket->msgData.dataReq.srcPanId, &mCoordInfo.coordPanId, 2);
+			mpPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
+			mpPacket->msgData.dataReq.srcAddrMode = mAddrMode;
+			mpPacket->msgData.dataReq.msduLength = sizeof(counterToS);
+			/* Request MAC level acknowledgement of the data packet */
+			mpPacket->msgData.dataReq.txOptions = gMacTxOptionsAck_c;
+			/* Give the data packet a handle. The handle is
+			returned in the MCPS-Data Confirm message. */
+			mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
+			/* Don't use security */
+			mpPacket->msgData.dataReq.securityLevel = gMacSecurityNone_c;
 
-		        /* Send the Data Request to the MCPS */
-		        (void)NWK_MCPS_SapHandler(mpPacket, macInstance);
+			/* Send the Data Request to the MCPS */
+			(void)NWK_MCPS_SapHandler(mpPacket, macInstance);
 
-		        /* Prepare for another data buffer */
-		        mpPacket = NULL;
-		        mcPendingPackets++;
-		    }
-			gLEDcounter ++;
-		 }
-
+			/* Prepare for another data buffer */
+			mpPacket = NULL;
+		}
 
 	}
 
@@ -550,54 +461,10 @@ void AppThread(osaTaskParam_t argument)
         case stateInit:
             /* Print a welcome message to the UART */
             Serial_Print(interfaceId, "MyWirelessApp Demo End Device application is initialized and ready.\n\r", gAllowToBlock_d);  
-#if gNvmTestActive_d 
-            if( ev & gAppEvtPressedRestoreNvmBut_c )
-            {
-              NvRestoreDataSet(&mCoordInfo, TRUE);
-              NvRestoreDataSet(&maMyAddress, TRUE);
-              NvRestoreDataSet(&mAddrMode, TRUE);
-            }
-            
-            if ( mCoordInfo.coordAddress && ( mAddrMode != gAddrModeNoAddress_c ) ) 
-            {
-                mlmeMessage_t msg;
-                msg.msgType = gMlmeSetReq_c;
-                msg.msgData.setReq.pibAttribute = gMPibShortAddress_c;
-                msg.msgData.setReq.pibAttributeValue = (uint8_t *)&maMyAddress[0];
-                (void)NWK_MLME_SapHandler( &msg, 0 );
-                msg.msgType = gMlmeSetReq_c;
-                msg.msgData.setReq.pibAttribute = gMPibCoordShortAddress_c;
-                msg.msgData.setReq.pibAttributeValue = (uint64_t *)&mCoordInfo.coordAddress;
-                (void)NWK_MLME_SapHandler( &msg, 0 );
-                msg.msgType = gMlmeSetReq_c;
-                msg.msgData.setReq.pibAttribute = gMPibPanId_c;
-                msg.msgData.setReq.pibAttributeValue = (uint16_t *)&mCoordInfo.coordPanId;
-                (void)NWK_MLME_SapHandler( &msg, 0 );
-                msg.msgType = gMlmeSetReq_c;
-                msg.msgData.setReq.pibAttribute = gMPibLogicalChannel_c;
-                msg.msgData.setReq.pibAttributeValue = (uint8_t *)&mCoordInfo.logicalChannel;
-                (void)NWK_MLME_SapHandler( &msg, 0 );                 
-                Serial_Print(interfaceId, "\n\rPIB elements restored from NVM:\n\r", gAllowToBlock_d); 
-                Serial_Print(interfaceId, "\n\rAddress...........0x", gAllowToBlock_d); Serial_PrintHex(interfaceId, (uint8_t*)&mCoordInfo.coordAddress, mCoordInfo.coordAddrMode == gAddrModeShortAddress_c ? 2 : 8, gPrtHexNoFormat_c);
-                Serial_Print(interfaceId, "\n\rPAN ID............0x", gAllowToBlock_d); Serial_PrintHex(interfaceId, (uint8_t*)&mCoordInfo.coordPanId, 2, gPrtHexNoFormat_c);
-                Serial_Print(interfaceId, "\n\rLogical Channel...0x", gAllowToBlock_d); Serial_PrintHex(interfaceId, &mCoordInfo.logicalChannel, 1, gPrtHexNoFormat_c);
-                Serial_Print(interfaceId, "\n\r", gAllowToBlock_d); 
-                Serial_Print(interfaceId, "End device address restored from NVM: 0x", gAllowToBlock_d);
-                Serial_PrintHex(interfaceId, maMyAddress, mAddrMode == gAddrModeShortAddress_c ? 2 : 8, gPrtHexNoFormat_c);
-                Serial_Print(interfaceId, "\n\r\n\r", gAllowToBlock_d);
-                /* Startup the timer */
-                TMR_StartLowPowerTimer(mTimer_c, gTmrSingleShotTimer_c ,mPollInterval, AppPollWaitTimeout, NULL );
-                gState = stateListen;
-            }
-            else
-            {
-                Serial_Print(interfaceId, "PIB elements were not restored from NVM!\n\r", gAllowToBlock_d); 
-#endif
+
                 /* Goto Active Scan state. */
                 gState = stateScanActiveStart;
-#if gNvmTestActive_d 
-            }
-#endif
+
             OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c);
             break;
             
@@ -640,17 +507,7 @@ void AppThread(osaTaskParam_t argument)
                         else
                         {
                             Serial_Print(interfaceId, "Scan did not find a suitable coordinator\n\r", gAllowToBlock_d);
-#if gNvmTestActive_d 
-                            if ( mCoordInfo.coordAddress && ( mAddrMode != gAddrModeNoAddress_c ) )
-                            {
-                                FLib_MemSet(&mCoordInfo, 0, sizeof(mCoordInfo));
-                                FLib_MemSet(maMyAddress, 0, 8);
-                                mAddrMode = gAddrModeNoAddress_c;
-                                NvSaveOnIdle(&mCoordInfo, TRUE);
-                                NvSaveOnIdle(&maMyAddress, TRUE);
-                                NvSaveOnIdle(&mAddrMode, TRUE);
-                            }
-#endif
+
                             /* Restart the Active scan */
                             gState = stateScanActiveStart;
                             OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c);
@@ -687,11 +544,7 @@ void AppThread(osaTaskParam_t argument)
                             Serial_Print(interfaceId, "We were assigned the short address 0x", gAllowToBlock_d);
                             Serial_PrintHex(interfaceId, maMyAddress, mAddrMode == gAddrModeShortAddress_c ? 2 : 8, gPrtHexNoFormat_c);
                             Serial_Print(interfaceId, "\n\r\n\rReady to send and receive data over the UART.\n\r\n\r", gAllowToBlock_d);                     
-#if gNvmTestActive_d                             
-                            NvSaveOnIdle(&mCoordInfo, TRUE);
-                            NvSaveOnIdle(&maMyAddress, TRUE);
-                            NvSaveOnIdle(&mAddrMode, TRUE);
-#endif 
+
                             /* Startup the timer */
                             TMR_StartLowPowerTimer(mTimer_c, gTmrSingleShotTimer_c ,mPollInterval, AppPollWaitTimeout, NULL );
                             /* Go to the listen state */
@@ -701,14 +554,7 @@ void AppThread(osaTaskParam_t argument)
                         else 
                         {
                             Serial_Print(interfaceId, "\n\rAssociate Confirm wasn't successful... \n\r\n\r", gAllowToBlock_d);
-#if gNvmTestActive_d 
-                            FLib_MemSet(&mCoordInfo, 0, sizeof(mCoordInfo));
-                            FLib_MemSet(maMyAddress, 0, 8);
-                            mAddrMode = gAddrModeNoAddress_c;
-                            NvSaveOnIdle(&mCoordInfo, TRUE);
-                            NvSaveOnIdle(&maMyAddress, TRUE);
-                            NvSaveOnIdle(&mAddrMode, TRUE);
-#endif
+
                             gState = stateScanActiveStart;
                             OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c);
                         }
@@ -733,21 +579,7 @@ void AppThread(osaTaskParam_t argument)
                 /* get byte from UART */
                 App_TransmitUartData();
             }
-#if gNvmTestActive_d  
-            if (timeoutCounter >= mDefaultValueOfTimeoutError_c)
-            {
-                  Serial_Print(interfaceId, "\n\rTimeout - No data received.\n\r\n\r", gAllowToBlock_d);
-                  FLib_MemSet(&mCoordInfo, 0, sizeof(mCoordInfo));
-                  FLib_MemSet(maMyAddress, 0, 8);
-                  mAddrMode = gAddrModeNoAddress_c;
-                  NvSaveOnIdle(&mCoordInfo, TRUE);
-                  NvSaveOnIdle(&maMyAddress, TRUE);
-                  NvSaveOnIdle(&mAddrMode, TRUE);
-                  timeoutCounter = 0;
-                  OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c);
-                  gState = stateInit;
-            }
-#endif
+
             break;
         }
 
@@ -1065,9 +897,7 @@ static uint8_t App_HandleAssociateConfirm(nwkMessage_t *pMsg)
 ******************************************************************************/
 static uint8_t App_HandleMlmeInput(nwkMessage_t *pMsg)
 {
-#if mEnterLowPowerWhenIdle_c
-  static uint8_t lowPowerCounter = 0;
-#endif
+
   if(pMsg == NULL)
     return errorNoMessage;
   
@@ -1085,28 +915,7 @@ static uint8_t App_HandleMlmeInput(nwkMessage_t *pMsg)
          allow a new poll request. Otherwise, we wait for the data
          indication before allowing the next poll request. */
       mWaitPollConfirm = FALSE;
-#if gNvmTestActive_d      
-      if(pMsg->msgData.pollCnf.status == gNoAck_c)
-      {
-          timeoutCounter++;
-      }
-      else
-      {
-          timeoutCounter = 0;
-      }
-#endif
-#if mEnterLowPowerWhenIdle_c
-    lowPowerCounter++;
-    if ( lowPowerCounter > mDefaultValueOfMlmeHandlersToAllowSleep_c)
-    {
-        Led1Off();
-        Led2Off();
-        Led3Off();
-        Led4Off();
-        lowPowerCounter = 0;
-        PWR_AllowDeviceToSleep();
-    }
-#endif
+
     }
     break;
 
@@ -1328,14 +1137,7 @@ static void App_HandleKeys
     case gKBD_EventSW2_c:
     case gKBD_EventSW3_c:
     case gKBD_EventSW4_c:
-#if gTsiSupported_d
-    case gKBD_EventSW5_c:    
-    case gKBD_EventSW6_c:    
-#endif
-#if gTsiSupported_d
-    case gKBD_EventLongSW5_c:
-    case gKBD_EventLongSW6_c:       
-#endif
+
         if(gState == stateInit)
         {
             LED_StopFlashingAllLeds();

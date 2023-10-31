@@ -38,6 +38,7 @@
 #define gMyNewTaskEvent1_c (1 << 0)
 #define gMyNewTaskEvent2_c (1 << 1)
 #define gMyNewTaskEvent3_c (1 << 2)
+#define gTimerLED_Event     15
 
 #define gMyTaskPriority_c 3
 #define gMyTaskStackSize_c 400

@@ -106,15 +106,6 @@ void MyTaskTimer_Start(void)
 	void MyTask_Init(void);
 }
 
-//Start Timer for LED//
-void LED_StartTimer()
-{
-    /* start the timer */
-    if(!TMR_IsTimerActive(ledTimerID))
-    {
-      //TMR_StartIntervalTimer(ledTimerID, 2000, (pfTmrCallBack_t)RGB_Timeout, (void*)((uint32_t)ledTimerID));
-    }
-}
 
 /************** COORDINATOR FUNCTION ****************
  * Data transport services between peers
