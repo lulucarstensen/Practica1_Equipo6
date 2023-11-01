@@ -106,24 +106,16 @@ void MyTaskTimer_Start(void)
 	void MyTask_Init(void);
 }
 
-//Start Timer for LED//
-void LED_StartTimer()
-{
-    /* start the timer */
-    if(!TMR_IsTimerActive(ledTimerID))
-    {
-      //  TMR_StartIntervalTimer(ledTimerID, 2000, (pfTmrCallBack_t)RGB_Timeout, (void*)((uint32_t)ledTimerID));
-    }
-}
 
 void newMessage(mcpsToNwkMessage_t * message,uint8_t interfaceId,uint8_t mcPendingPackets)
 {
-	uint8_t received[10];
+	uint8_t *received;
 	uint8_t count;
-	*received = message->msgData.dataInd.pMsdu;
-	if(received[9] >= 0 && received[9] <= 5 ){
-		count = received[9];
-	}
+	received = message->msgData.dataInd.pMsdu;
+//	if(received[9] >= 0 && received[9] <= 5 ){
+//		count = received[9];
+//	}
+	count = *received;
 	switch(message->msgType)
 	{
 		/* The MCPS-Data confirm is sent by the MAC to the network
@@ -134,10 +126,15 @@ void newMessage(mcpsToNwkMessage_t * message,uint8_t interfaceId,uint8_t mcPendi
 			break;
 
 		case gMcpsDataInd_c:
-
+			Serial_Print(interfaceId,"PAN ID: ", gAllowToBlock_d);
             Serial_PrintHex(interfaceId,&message->msgData.dataInd.srcPanId, 2, gPrtHexNoFormat_c);
+			Serial_Print(interfaceId,"\n", gAllowToBlock_d);
+			Serial_Print(interfaceId,"LQI: ", gAllowToBlock_d);
             Serial_PrintHex(interfaceId,&message->msgData.dataInd.mpduLinkQuality, 1, gPrtHexNoFormat_c);
+			Serial_Print(interfaceId,"\n", gAllowToBlock_d);
+			Serial_Print(interfaceId,"Length: ", gAllowToBlock_d);
             Serial_PrintHex(interfaceId,&message->msgData.dataInd.msduLength, 1, gPrtHexNoFormat_c);
+			Serial_Print(interfaceId,"\n", gAllowToBlock_d);
 			break;
 
 		default:
