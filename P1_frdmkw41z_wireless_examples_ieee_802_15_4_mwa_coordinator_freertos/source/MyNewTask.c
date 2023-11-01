@@ -116,10 +116,14 @@ void LED_StartTimer()
     }
 }
 
-static void newMessage(mcpsToNwkMessage_t * message,uint8_t interfaceId,uint8_t mcPendingPackets)
+void newMessage(mcpsToNwkMessage_t * message,uint8_t interfaceId,uint8_t mcPendingPackets)
 {
+	uint8_t received[10];
 	uint8_t count;
-	//message->msgData.dataInd.pMsdu;
+	*received = message->msgData.dataInd.pMsdu;
+	if(received[9] >= 0 && received[9] <= 5 ){
+		count = received[9];
+	}
 	switch(message->msgType)
 	{
 		/* The MCPS-Data confirm is sent by the MAC to the network

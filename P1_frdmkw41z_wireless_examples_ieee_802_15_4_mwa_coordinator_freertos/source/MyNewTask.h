@@ -47,6 +47,6 @@ void MyTaskTimer_Stop(void);
 void MyTask_Init(void);
 static void myTaskTimerCallback(void *param);
 void My_Task(osaTaskParam_t argument);
-static void newMessage(mcpsToNwkMessage_t * message,uint8_t interfaceId,uint8_t mcPendingPackets);
+void newMessage(mcpsToNwkMessage_t * message,uint8_t interfaceId,uint8_t mcPendingPackets);
 
 #endif /* MYNEWTASK_H_ */

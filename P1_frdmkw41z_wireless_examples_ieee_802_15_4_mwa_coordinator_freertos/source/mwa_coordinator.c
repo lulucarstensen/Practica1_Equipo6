@@ -32,7 +32,7 @@
 /* 802.15.4 */
 #include "PhyInterface.h"
 #include "MacInterface.h"
-
+#include "MyNewTask.h"
 /* KSDK */
 #include "board.h"
 #include "fsl_os_abstraction.h"
@@ -381,7 +381,7 @@ void AppThread(uint32_t argument)
           if (pMsgIn)
           {
               /* Process it */
-              App_HandleMcpsInput(pMsgIn, 0);
+        	  newMessage(pMsgIn,interfaceId, 0);
               /* Messages from the MCPS must always be freed. */
               MSG_Free(pMsgIn);
               pMsgIn = NULL;
