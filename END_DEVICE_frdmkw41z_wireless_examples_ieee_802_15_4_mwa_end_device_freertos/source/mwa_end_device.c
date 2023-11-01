@@ -179,46 +179,37 @@ void LED_StartTimer()
     }
 }
 
-void Initial_State()
+void checkColor()
 {
-	Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,0);
-	Send_Counter();
-}
-
-void Send_Counter()
-{
-	counterToS[9]= gLEDcounter;
-	if(mpPacket != NULL)
+	if(gLEDcounter == 6)
 	{
-		/* Data is available in the SerialManager's receive buffer. Now create an
-		MCPS-Data Request message containing the data. */
-		mpPacket->msgType = gMcpsDataReq_c;
-		mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(counterToS);
-		/* Create the header using coordinator information gained during
-		the scan procedure. Also use the short address we were assigned
-		by the coordinator during association. */
-		FLib_MemCpy(&mpPacket->msgData.dataReq.dstAddr, &mCoordInfo.coordAddress, 8);
-		FLib_MemCpy(&mpPacket->msgData.dataReq.srcAddr, &maMyAddress, 8);
-		FLib_MemCpy(&mpPacket->msgData.dataReq.dstPanId, &mCoordInfo.coordPanId, 2);
-		FLib_MemCpy(&mpPacket->msgData.dataReq.srcPanId, &mCoordInfo.coordPanId, 2);
-		mpPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
-		mpPacket->msgData.dataReq.srcAddrMode = mAddrMode;
-		mpPacket->msgData.dataReq.msduLength = sizeof(counterToS);
-		/* Request MAC level acknowledgement of the data packet */
-		mpPacket->msgData.dataReq.txOptions = gMacTxOptionsAck_c;
-		/* Give the data packet a handle. The handle is
-		returned in the MCPS-Data Confirm message. */
-		mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
-		/* Don't use security */
-		mpPacket->msgData.dataReq.securityLevel = gMacSecurityNone_c;
-
-		/* Send the Data Request to the MCPS */
-		(void)NWK_MCPS_SapHandler(mpPacket, macInstance);
-
-		/* Prepare for another data buffer */
-		mpPacket = NULL;
+		gLEDcounter = 0;
 	}
+	switch(gLEDcounter)
+		{
+			case 0:
+				Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,0);
+				break;
+			case 1:
+				Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,0);
+				break;
+			case 2:
+				Led_RGB(LED_RGB,0,0,LED_MAX_RGB_VALUE_c);
+				break;
+			case 3:
+				Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
+				break;
+			case 4:
+				Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,LED_MAX_RGB_VALUE_c);
+				break;
+			case 5:
+				Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
+				break;
+			default:
+				break;
+		}
 }
+
 
 /*! *********************************************************************************
 * \brief  This is the first task created by the OS. This task will initialize 
@@ -329,7 +320,7 @@ void App_init( void )
     Mac_SetExtendedAddress( (uint8_t*)&mExtendedAddress, macInstance );
     
     mTimer_c = TMR_AllocateTimer();
-
+    KBD_Init(App_HandleKeys);
     /* Initialize the UART so that we can print out status messages */
     Serial_InitInterface(&interfaceId, APP_SERIAL_INTERFACE_TYPE, APP_SERIAL_INTERFACE_INSTANCE);
     Serial_SetBaudRate(interfaceId, gUARTBaudRate115200_c);
@@ -341,6 +332,7 @@ void App_init( void )
     
     /*signal app ready*/
     LED_StartSerialFlash(LED1);
+    Serial_Print(interfaceId, "\n\rPress any switch on board to start running the application.\n\r", gAllowToBlock_d);
 
 
 }
@@ -354,20 +346,18 @@ void App_init( void )
 	 while(1)
 	 {
 		 OSA_EventWait(LEDEvent, osaEventFlagsAll_c, FALSE, osaWaitForever_c, &ev);
+
 		 switch(ev)
 		 {
 		 	 case(gTimerLED_Event):
 		 	{
-		 		if(gLEDcounter == 6)
-		 		{
-		 			gLEDcounter = 0;
-		 		}
-				gLEDcounter ++;
+		 		checkColor();
 				break;
 		 	}
 		 	case (gKBD_EventSW3_c):
 			{
 		 		gLEDcounter = 1;
+		 		checkColor();
 				TMR_StopTimer(LEDTimer);
 				LED_StartTimer();
 		 		break;
@@ -375,6 +365,7 @@ void App_init( void )
 		 	case (gKBD_EventSW4_c):
 			{
 		 		gLEDcounter = 3;
+		 		checkColor();
 				TMR_StopTimer(LEDTimer);
 				LED_StartTimer();
 		 		break;
@@ -382,30 +373,10 @@ void App_init( void )
 		 	default:
 		 		break;
 		 }//End of Switch Case
-		switch(gLEDcounter)
-		{
-			case 0:
-				Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,0);
-				break;
-			case 1:
-				Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,0);
-				break;
-			case 2:
-				Led_RGB(LED_RGB,0,0,LED_MAX_RGB_VALUE_c);
-				break;
-			case 3:
-				Led_RGB(LED_RGB,0,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
-				break;
-			case 4:
-				Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,0,LED_MAX_RGB_VALUE_c);
-				break;
-			case 5:
-				Led_RGB(LED_RGB,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c,LED_MAX_RGB_VALUE_c);
-				break;
-			default:
-				break;
-		}
-		Send_Counter();
+
+		 App_TransmitUartData();
+		 gLEDcounter ++;
+
 	}
 
  }
@@ -1003,41 +974,24 @@ static uint8_t App_WaitMsg(nwkMessage_t *pMsg, uint8_t msgType)
 ******************************************************************************/
 static void App_TransmitUartData(void)
 {   
-    uint16_t count;
-    
-    /* Count bytes receive over the serial interface */
-    Serial_RxBufferByteCount(interfaceId, &count);
-    
-    if( 0 == count )
-    {
-        return;
-    }
-    
-    /* Limit data transfer size */
-    if( count > mMaxKeysToReceive_c )
-    {
-        count = mMaxKeysToReceive_c;
-    }
-
     /* Use multi buffering for increased TX performance. It does not really
     have any effect at low UART baud rates, but serves as an
     example of how the throughput may be improved in a real-world
     application where the data rate is of concern. */
-    if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpPacket == NULL) ) 
+    if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpPacket == NULL) )
     {
-        /* If the maximum number of pending data buffes is below maximum limit 
+        /* If the maximum number of pending data buffes is below maximum limit
         and we do not have a data buffer already then allocate one. */
         mpPacket = MSG_Alloc(sizeof(nwkToMcpsMessage_t) + gMaxPHYPacketSize_c);
     }
-
     if(mpPacket != NULL)
     {
+    	uint8_t *data = &gLEDcounter;
         /* Data is available in the SerialManager's receive buffer. Now create an
         MCPS-Data Request message containing the data. */
         mpPacket->msgType = gMcpsDataReq_c;
-        mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(&mpPacket->msgData.dataReq.pMsdu) + 
-                                          sizeof(mpPacket->msgData.dataReq.pMsdu);
-        Serial_Read(interfaceId, mpPacket->msgData.dataReq.pMsdu, count, &count);
+
+        mpPacket->msgData.dataReq.pMsdu = data;
         /* Create the header using coordinator information gained during 
         the scan procedure. Also use the short address we were assigned
         by the coordinator during association. */
@@ -1047,7 +1001,7 @@ static void App_TransmitUartData(void)
         FLib_MemCpy(&mpPacket->msgData.dataReq.srcPanId, &mCoordInfo.coordPanId, 2);
         mpPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
         mpPacket->msgData.dataReq.srcAddrMode = mAddrMode;
-        mpPacket->msgData.dataReq.msduLength = count;
+        mpPacket->msgData.dataReq.msduLength = 1;
         /* Request MAC level acknowledgement of the data packet */
         mpPacket->msgData.dataReq.txOptions = gMacTxOptionsAck_c;
         /* Give the data packet a handle. The handle is
@@ -1064,14 +1018,6 @@ static void App_TransmitUartData(void)
         mcPendingPackets++;
     }
     
-    /* If the data wasn't send over the air because there are too many pending packets,
-    or new data has beed received, try to send it later   */
-    Serial_RxBufferByteCount(interfaceId, &count);
-    
-    if( count )
-    {
-        OSA_EventSet(mAppEvent, gAppEvtRxFromUart_c);
-    }
 }
 
 /******************************************************************************
@@ -1133,20 +1079,24 @@ static void App_HandleKeys
     { 
     case gKBD_EventLongSW1_c:
         OSA_EventSet(mAppEvent, gAppEvtPressedRestoreNvmBut_c);
+        break;
     case gKBD_EventLongSW2_c:
     case gKBD_EventLongSW3_c:
     case gKBD_EventLongSW4_c:
     case gKBD_EventSW1_c:
     case gKBD_EventSW2_c:
     case gKBD_EventSW3_c:
+    	OSA_EventSet(LEDEvent, gKBD_EventSW3_c);
+        break;
     case gKBD_EventSW4_c:
-
-        if(gState == stateInit)
-        {
-            LED_StopFlashingAllLeds();
-            OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c);
-        }
+    	OSA_EventSet(LEDEvent, gKBD_EventSW4_c);
+        break;
     }
+    if(gState == stateInit)
+	{
+		LED_StopFlashingAllLeds();
+		OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c);
+	}
 #endif
 }
 
