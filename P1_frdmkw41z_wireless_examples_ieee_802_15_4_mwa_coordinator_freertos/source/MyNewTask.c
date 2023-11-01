@@ -126,8 +126,8 @@ void newMessage(mcpsToNwkMessage_t * message,uint8_t interfaceId,uint8_t mcPendi
 			break;
 
 		case gMcpsDataInd_c:
-			Serial_Print(interfaceId,"PAN ID: ", gAllowToBlock_d);
-            Serial_PrintHex(interfaceId,&message->msgData.dataInd.srcPanId, 2, gPrtHexNoFormat_c);
+			Serial_Print(interfaceId,"Source Address: ", gAllowToBlock_d);
+            Serial_PrintHex(interfaceId,&message->msgData.dataInd.srcAddr, 8, gPrtHexNoFormat_c);
 			Serial_Print(interfaceId,"\n", gAllowToBlock_d);
 			Serial_Print(interfaceId,"LQI: ", gAllowToBlock_d);
             Serial_PrintHex(interfaceId,&message->msgData.dataInd.mpduLinkQuality, 1, gPrtHexNoFormat_c);
